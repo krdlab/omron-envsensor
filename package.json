@@ -1,0 +1,16 @@
+{
+  "name": "omron-envsensor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "krdlab",
+  "license": "MIT",
+  "dependencies": {
+    "@abandonware/noble": "^1.9.2-13",
+    "node-omron-envsensor": "futomi/node-omron-envsensor"
+  }
+}

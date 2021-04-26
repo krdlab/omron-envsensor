@@ -1,0 +1,2 @@
+- [@abandonware/noble](https://github.com/abandonware/noble)
+- [futomi/node-omron-envsensor](https://github.com/futomi/node-omron-envsensor)
