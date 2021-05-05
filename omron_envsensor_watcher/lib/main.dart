@@ -2,10 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:flutter_blue/flutter_blue.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'advertising.dart' as advertising;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  FlutterBackgroundService.initialize(onStart);
+  FlutterBackgroundService.initialize(onStart, autoStart: false); // TODO: autoStart = false が効かない？
 
   runApp(MyApp());
 }
@@ -16,17 +19,38 @@ void onStart() {
   service.onDataReceived.listen((event) {
     if (event != null && event["action"] == "stop") {
       service.stopBackgroundService();
+      print('Stop the background service');
     }
   });
 
   service.setForegroundMode(false);
-  Timer.periodic(Duration(seconds: 1), (timer) async {
+  Timer.periodic(Duration(seconds: 40), (timer) async {
     if (!(await service.isServiceRunning())) {
       timer.cancel();
+      print('Stop the timer');
     }
-    service.sendData(
-      {"current_date": DateTime.now().toIso8601String()},
-    );
+
+    FlutterBlue blue = FlutterBlue.instance;
+    blue.startScan(timeout: Duration(seconds: 10));
+    print('Start BLE device scanning');
+    blue.scanResults.listen((results) {
+      var found = false;
+      for (ScanResult result in results) {
+        final ad = advertising.parse(result);
+        if (ad != null) {
+          print('[BG] found: ${ad.data}');
+          service.sendData(
+            {"device": result.device.name},
+          );
+          found = true;
+        }
+      }
+      if (!found) {
+        service.sendData(
+          {"device": "not found"},
+        );
+      }
+    });
   });
 }
 
@@ -53,12 +77,13 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  String _buttonText = "Stop";
+  final _service = FlutterBackgroundService();
+  String _buttonText = "Start";
 
   Future<bool> _switchService() async {
-    var isRunning = await FlutterBackgroundService().isServiceRunning();
+    final isRunning = await _service.isServiceRunning();
     if (isRunning) {
-      FlutterBackgroundService().sendData(
+      _service.sendData(
         {"action": "stop"},
       );
     } else {
@@ -68,8 +93,21 @@ class _HomePageState extends State<HomePage> {
   }
 
   String _getServiceDataAsString(Map<String, dynamic> data) {
-    DateTime? date = DateTime.tryParse(data["current_date"]);
-    return date.toString();
+    String? device = data["device"];
+    return device.toString();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPermission();
+  }
+
+  _checkPermission() async {
+    final status = await Permission.location.status;
+    if (status.isDenied || status.isRestricted) {
+      await Permission.location.request();
+    }
   }
 
   @override
@@ -83,7 +121,7 @@ class _HomePageState extends State<HomePage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
             StreamBuilder<Map<String, dynamic>?>(
-              stream: FlutterBackgroundService().onDataReceived,
+              stream: _service.onDataReceived,
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
                   return Center(
@@ -96,13 +134,14 @@ class _HomePageState extends State<HomePage> {
             ElevatedButton(
               child: Text(_buttonText),
               onPressed: () async {
-                var isRunning = await _switchService();
-                if (isRunning) {
-                  _buttonText = 'Stop';
-                } else {
-                  _buttonText = 'Start';
-                }
-                setState(() {});
+                final isRunning = await _switchService();
+                setState(() {
+                  if (isRunning) {
+                    _buttonText = 'Stop';
+                  } else {
+                    _buttonText = 'Start';
+                  }
+                });
               },
             ),
           ],
