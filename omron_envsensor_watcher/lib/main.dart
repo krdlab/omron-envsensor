@@ -40,7 +40,7 @@ void onStart() {
         if (ad != null) {
           print('[BG] found: ${ad.data}');
           service.sendData(
-            {"device": result.device.name},
+            {"device": ad.data.toString()},
           );
           found = true;
         }
